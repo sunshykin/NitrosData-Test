@@ -1,4 +1,5 @@
-﻿using Microsoft.AspNetCore.Mvc;
+﻿using System.Web.Http.OData;
+using Microsoft.AspNetCore.Mvc;
 using NitrosData.Test.Data;
 using NitrosData.Test.Models;
 
@@ -33,11 +34,23 @@ namespace NitrosData.Test.Web.Controllers.api
                 return NotFound();
         }
 
-		//ToDo сделать Patch
         [HttpPost]
         public IActionResult Add([FromBody]Person person)
         {
             _adapter.Save(person);
+			return Ok();
+        }
+		
+        [HttpPatch("{id}")]
+        public IActionResult Patch([FromBody]Delta<Person> patchPerson, [FromRoute] int id)
+        {
+	        var original = _adapter.Get(id);
+
+	        if (original == null)
+		        return NotFound();
+
+	        patchPerson.Patch(original);
+
 			return Ok();
         }
 

@@ -48,7 +48,7 @@ Vue.component('master',
             }
         },
         methods: {
-            sortBy: function (key) {
+            sortBy: function(key) {
                 if (!key.toLowerCase().includes('name'))
                     return;
 
@@ -68,7 +68,14 @@ Vue.component('master',
             // Редактирование данных выбранной строки
             editRow(person) {
                 // Записываем данные персоны для редактирования
-                this.$root.master.editPerson = person;
+                this.$root.master.editPerson = {
+                    id: person.id,
+                    surname: person.surname,
+                    name: person.name,
+                    middleName: person.middleName,
+                    birthDate: person.birthDate,
+                    address: person.address
+                };
 
                 // Показываем модальное окно редактирования
                 this.$root.master.showEditModal = true;
@@ -323,6 +330,11 @@ var app = new Vue({
                 });
         },
 
+        // Patch-запрос на сервер для сохранения данных персоны
+        patchPersonREST: function(person, id) {
+            axios.patch('/api/Person/' + id, person);
+        },
+
         // Отмена удаления персоны
         cancelDelete: function() {
             // Скрываем модальное окно удаления
@@ -354,14 +366,44 @@ var app = new Vue({
             this.master.editPerson = null;
         },
 
+        getPatchPersonInfo: function (person) {
+            // Версия данных персоны, которая есть на сервере
+            var original = this.master.persons[this.master.persons.findIndex(p => p.id == person.id)];
+            var result = {};
+
+            if (original.surname !== person.surname)
+                result.Surname = person.surname;
+            if (original.name !== person.name)
+                result.Name = person.name;
+            if (original.middleName !== person.middleName)
+                result.MiddleName = person.middleName;
+            if (original.birthDate !== person.birthDate)
+                result.BirthDate = new Date(person.birthDate);
+            if (original.address !== person.address)
+                result.Address = person.address;
+
+            return result;
+        },
+
         // Функция сохранения редактированых данных персоны
         saveEdit: function () {
-            // Отправление запроса на удаление объекта на сервере
-            this.postPersonREST(this.master.editPerson);
+            // Собираем информацию для патча
+            var patch = this.getPatchPersonInfo(this.master.editPerson);
+            
+            // Отправление запроса на изменение объекта на сервере
+            this.patchPersonREST(patch, this.master.editPerson.id);
 
-            // Изменение данных строки в таблице
+            // Изменение данных в строке таблицы
             var index = this.master.persons.findIndex(p => p.id == this.master.editPerson.id);
-            this.master.persons[index] = this.master.editPerson;
+            var or = this.master.persons[index];
+
+            or.surname = this.master.editPerson.surname;
+            or.name = this.master.editPerson.name;
+            or.middleName = this.master.editPerson.middleName;
+            or.address = this.master.editPerson.address;
+            or.birthDate = this.master.editPerson.birthDate;
+            or.birthDateStr =  new Date(this.master.editPerson.birthDate)
+                .toLocaleDateString('ru-RU', { year: 'numeric', month: 'short', day: 'numeric' });
 
             // Для экономии выполняем cancel, поскольку нам нужен такой же функционал
             this.cancelEdit();
