@@ -1,0 +1,205 @@
+﻿<!--Component templates-->
+<template id="master-page">
+    <div>
+        <form id="search">
+            <div class="input-group">
+                <input id="search-input" type="text" name="query" v-model="searchQuery" class="form-control" placeholder="Пoиск">
+            </div>
+        </form>
+        <table>
+            <thead>
+                <tr>
+                    <th v-for="col in columns"
+                        @click="sortBy(col.name)"
+                        :class="{ active: sortKey == col.name }">
+                        {{ col.caption }}
+                        <span v-if="col.name.toLowerCase().includes('name')" class="arrow"
+                              :class="sortOrders[col.name] > 0 ? 'asc' : 'dsc'">
+                        </span>
+                    </th>
+                    <th>Управление</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr v-for="person in filteredData">
+                    <td v-for="col in columns">
+                        {{person[col.name]}}
+                    </td>
+                    <td style="text-align: center;">
+                        <button class="btn" @click="editRow(person)" title="Редактировать данные выбранной строки">
+                            <i class="far fa-edit" aria-hidden="true"></i>
+                        </button>
+                        <button class="btn" @click="deleteRow(person.id)" title="Удалить выбранную строку">
+                            <i class="fa fa-times" aria-hidden="true"></i>
+                        </button>
+                        <button class="btn" @click="openDetails(person)" title="Подробнее">
+                            <i class="fas fa-info-circle" aria-hidden="true"></i>
+                        </button>
+                    </td>
+                </tr>
+            </tbody>
+        </table>
+        <button class="btn btn-default btn-add" @click="createRow()" title="Добавить новую запись">
+            <i class="fas fa-plus" aria-hidden="true"></i>
+        </button>
+    </div>
+</template>
+
+<template id="yn-modal">
+    <transition name="modal">
+        <div class="modal-mask">
+            <div class="modal-wrapper">
+                <div class="modal-container"
+                     :class="classObject">
+
+                    <div class="modal-header">
+                        <slot name="header"></slot>
+                    </div>
+
+                    <div class="modal-body">
+                        <slot name="body"></slot>
+                    </div>
+
+                    <div class="modal-footer">
+                        <button class="btn btn-danger" @click="onNo"><slot name="no-text"></slot></button>
+                        <button class="btn btn-success" @click="onYes"><slot name="yes-text"></slot></button>
+                    </div>
+
+                </div>
+            </div>
+        </div>
+    </transition>
+</template>
+
+<template id="details-page">
+    <div>
+        <button class="btn btn-default" @click="backToMaster()" title="Вернуться назад">
+            <i class="fas fa-arrow-circle-left" aria-hidden="true"></i>
+        </button>
+        <div>
+            <h3 id="person-header">{{ person.surname + ' ' + person.name + ' ' + person.middleName }}</h3>
+        </div>
+        <div>
+            <h5 v-if="!isRelatives" style="text-align: center">Не найдено ни одного родственника.</h5>
+        </div>
+        <table v-if="isRelatives">
+            <thead>
+                <tr>
+                    <th v-for="col in columns">
+                        {{ col.caption }}
+                    </th>
+                    <th>Удалить</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr v-for="person in relativesData">
+                    <td v-for="col in columns">
+                        {{person[col.name]}}
+                    </td>
+                    <td style="text-align: center;">
+                        <button class="btn" @click="deleteRelative(person.id)" title="Удалить выбранного родственника">
+                            <i class="fa fa-times" aria-hidden="true"></i>
+                        </button>
+                    </td>
+                </tr>
+            </tbody>
+        </table>
+        <button class="btn btn-default btn-add" title="Добавить родственника" @click="addRelative">
+            <i class="fas fa-plus" aria-hidden="true"></i>
+        </button>
+
+        <yes-no-modal v-if="showAddModal" @yes="confirmAdd" @no="cancelAdd">
+            <h3 slot="header">Добавление родственника</h3>
+            <div class="form-group" slot="body">
+                <select class="form-control" v-model="selectedId">
+                    <option v-for="p in nonRelativesData" :value="p.id">
+                        {{ p.surname + ' ' + p.name + ' ' + p.middleName }}
+                    </option>
+                </select>
+            </div>
+            <span slot="no-text">Отменить</span>
+            <span slot="yes-text">Добавить</span>
+        </yes-no-modal>
+    </div>
+</template>
+
+<!--App-->
+<script type="text/javascript" src="https://cdn.jsdelivr.net/npm/vue/dist/vue.js"></script>
+<script type="text/javascript" src="https://cdnjs.cloudflare.com/ajax/libs/axios/0.18.0/axios.js"></script>
+<link rel="stylesheet" href="https://use.fontawesome.com/releases/v5.1.0/css/all.css" integrity="sha384-lKuwvrZot6UHsBSfcMvOkWwlCMgc0TaWr+30HWe3a4ltaBwTZhyTEggF5tJv8tbt" crossorigin="anonymous">
+<link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.1.1/css/bootstrap.min.css">
+<div id="app">
+    <div id="master-env" v-if="mode == 'master'">
+        <master :data="master.persons" :columns="master.columns"></master>
+
+        <yes-no-modal v-if="master.showDelModal" @yes='deletePerson' @no="cancelDelete">
+            <h3 slot="header">Удаление</h3>
+            <h5 slot="body">Вы действительно хотите удалить данную строку?</h5>
+            <span slot="no-text">Нет</span>
+            <span slot="yes-text">Да</span>
+        </yes-no-modal>
+
+        <yes-no-modal v-if="master.showEditModal" @yes='saveEdit' @no="cancelEdit">
+            <h3 slot="header">Редактирование</h3>
+            <form id="edit" slot="body">
+                <div class="form-group">
+                    <label for="surname-input">Фамилия</label>
+                    <input type="text" class="form-control" id="surname-input" v-model="master.editPerson.surname">
+                </div>
+                <div class="form-group">
+                    <label for="surname-input">Имя</label>
+                    <input type="text" class="form-control" id="name-input" v-model="master.editPerson.name">
+                </div>
+                <div class="form-group">
+                    <label for="surname-input">Отчество</label>
+                    <input type="text" class="form-control" id="middleName-input" v-model="master.editPerson.middleName">
+                </div>
+                <div class="form-group">
+                    <label for="surname-input">Дата рождения</label>
+                    <input type="date" class="form-control" id="birthDate-input" v-model="master.editPerson.birthDate">
+                </div>
+                <div class="form-group">
+                    <label for="surname-input">Адрес</label>
+                    <textarea class="form-control" id="address-input" v-model="master.editPerson.address"> </textarea>
+                </div>
+            </form>
+            <span slot="no-text">Отменить</span>
+            <span slot="yes-text">Сохранить</span>
+        </yes-no-modal>
+
+        <yes-no-modal v-if="master.showCreateModal" @yes='saveCreate' @no="cancelCreate">
+            <h3 slot="header">Создание новой персоны</h3>
+            <form id="create" slot="body">
+                <div class="form-group">
+                    <label for="surname-input">Фамилия</label>
+                    <input type="text" class="form-control" id="surname-input" v-model="master.editPerson.surname">
+                </div>
+                <div class="form-group">
+                    <label for="surname-input">Имя</label>
+                    <input type="text" class="form-control" id="name-input" v-model="master.editPerson.name">
+                </div>
+                <div class="form-group">
+                    <label for="surname-input">Отчество</label>
+                    <input type="text" class="form-control" id="middleName-input" v-model="master.editPerson.middleName">
+                </div>
+                <div class="form-group">
+                    <label for="surname-input">Дата рождения</label>
+                    <input type="date" class="form-control" id="birthDate-input" v-model="master.editPerson.birthDate">
+                </div>
+                <div class="form-group">
+                    <label for="surname-input">Адрес</label>
+                    <textarea class="form-control" id="address-input" v-model="master.editPerson.address"> </textarea>
+                </div>
+            </form>
+            <span slot="no-text">Отменить</span>
+            <span slot="yes-text">Сохранить</span>
+        </yes-no-modal>
+    </div>
+    
+    <div id="details-env" v-if="mode == 'details'">
+        <detail :columns="details.columns"></detail>
+    </div>
+</div>
+
+<script type="text/javascript" src="/main.js"></script>
+<link rel="stylesheet" type="text/css" href="/style.css">
